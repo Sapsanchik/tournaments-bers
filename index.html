@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Система рейтинга Глико</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>Рейтинг ККИ Берсерк(Глико)</h1>
+                <p class="description">
+                    Сезонная система рейтинга с турнирной статистикой и наградами за
+                    посещение.
+                </p>
+                <div class="nav-buttons">
+                    <button id="goToSwissBtn" class="nav-btn">
+                        🎲 Турниры(Швейцарка)
+                    </button>
+                </div>
+            </header>
+
+            <div class="two-columns">
+                <div class="card">
+                    <h2>Добавить игрока</h2>
+                    <form id="addPlayerForm">
+                        <div class="form-group">
+                            <label for="playerName">Имя игрока:</label>
+                            <input
+                                type="text"
+                                id="playerName"
+                                placeholder="Введите имя игрока"
+                                required
+                            />
+                        </div>
+                        <button type="submit">Добавить игрока</button>
+                    </form>
+                    <div
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 10px;
+                        "
+                    >
+                        <h2 style="margin: 0">Список игроков</h2>
+                        <button
+                            id="toggleInactivePlayers"
+                            class="secondary"
+                            style="font-size: 12px; padding: 5px 10px"
+                        >
+                            Показать всех
+                        </button>
+                    </div>
+                    <div class="player-list" id="playerList"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Добавить результаты игр</h2>
+                    <div class="info-box">
+                        <strong>Турнирные игры:</strong> Игры группируются по дате для
+                        подсчета статистики турниров.
+                    </div>
+                    <form id="gamesForm">
+                        <div class="form-group">
+                            <label for="gameDate">Дата турнира:</label
+                            ><input type="date" id="gameDate" required />
+                        </div>
+                        <h3>Список игр турнира</h3>
+                        <div class="games-container" id="gamesContainer"></div>
+                        <div class="batch-actions">
+                            <button type="button" id="addGameBtn" class="add-game-btn">
+                                + Добавить игру
+                            </button>
+                            <button type="button" id="addByeGameBtn" class="warning">
+                                + Добавить BYE
+                            </button>
+                            <button type="button" id="clearGamesBtn" class="danger">
+                                Очистить все
+                            </button>
+                        </div>
+                        <button type="submit">Сохранить турнир</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div
+                    style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 15px;
+                    "
+                >
+                    <h2 style="margin: 0">Рейтинг игроков</h2>
+                    <div class="sort-controls">
+                        <select id="sortBy">
+                            <option value="rating">По рейтингу</option>
+                            <option value="games">По количеству игр</option>
+                            <option value="tournaments">По количеству турниров</option>
+                            <option value="name">По имени</option>
+                            <option value="rd">По RD (нестабильности)</option>
+                        </select>
+                        <select id="sortOrder">
+                            <option value="desc">По убыванию</option>
+                            <option value="asc">По возрастанию</option>
+                        </select>
+                    </div>
+                </div>
+                <table id="ratingTable">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="position">#</th>
+                            <th class="sortable" data-sort="name">Игрок</th>
+                            <th class="sortable" data-sort="rating">Рейтинг</th>
+                            <th class="sortable" data-sort="rd">RD</th>
+                            <th class="sortable" data-sort="games">Игр в сезоне</th>
+                            <th class="sortable" data-sort="tournaments">Турниров</th>
+                            <th class="sortable" data-sort="lastUpdate">
+                                Последнее обновление
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="ratingBody"></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>История игр</h2>
+                <div class="game-history">
+                    <table id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Тип</th>
+                                <th>Игрок 1</th>
+                                <th>Результат</th>
+                                <th>Игрок 2</th>
+                                <th>Результат</th>
+                                <th>Изменения рейтинга</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button id="exportData">Экспорт данных</button>
+                <button id="importData">Импорт данных</button>
+                <button id="resetSeasonBtn" class="warning">Сбросить сезон</button>
+                <button id="resetData" class="danger">Сбросить все данные</button>
+            </div>
+        </div>
+
+        <div class="season-info" id="seasonInfo">
+            <span class="season-info-text">Загрузка информации о сезоне...</span>
+            <div class="season-info-actions">
+                <button class="secondary" onclick="GlickoUI.resetSeason()">
+                    Сбросить сезон
+                </button>
+            </div>
+        </div>
+
+        <!-- Модальные окна -->
+        <div id="playerModal" class="modal-overlay" style="display: none">
+            <div class="player-modal">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="modalPlayerName">Имя игрока</h2>
+                    <button class="close-modal" onclick="GlickoUI.closePlayerModal()">
+                        ×
+                    </button>
+                </div>
+                <div class="tab-navigation">
+                    <button
+                        class="tab-button active"
+                        onclick="GlickoUI.switchTab('stats-tab', event)"
+                    >
+                        Общая статистика</button
+                    ><button
+                        class="tab-button"
+                        onclick="GlickoUI.switchTab('tournaments-tab', event)"
+                    >
+                        Турниры</button
+                    ><button
+                        class="tab-button"
+                        onclick="GlickoUI.switchTab('opponents-tab', event)"
+                    >
+                        Соперники
+                    </button>
+                </div>
+                <div id="stats-tab" class="tab-content active">
+                    <div class="player-stats">
+                        <div class="stat-card">
+                            <div class="stat-value" id="modalPlayerRating">1500</div>
+                            <div class="stat-label">Рейтинг</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="modalPlayerRD">200</div>
+                            <div class="stat-label">RD</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="modalTotalGames">0</div>
+                            <div class="stat-label">Игр в сезоне</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="modalTournamentsCount">0</div>
+                            <div class="stat-label">Турниров</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="modalAvgGamesPerTournament">
+                                0
+                            </div>
+                            <div class="stat-label">Игр/турнир</div>
+                        </div>
+                    </div>
+                    <div class="season-reset-section">
+                        <h3>Сброс сезонной статистики</h3>
+                        <p>
+                            Сброс количества игр и турниров для награждения в конце
+                            сезона.
+                        </p>
+                        <div class="reset-stats">
+                            <div class="reset-stat">
+                                <div class="stat-value" id="resetGamesCount">0</div>
+                                <div class="stat-label">Игр в сезоне</div>
+                            </div>
+                            <div class="reset-stat">
+                                <div class="stat-value" id="resetTournamentsCount">0</div>
+                                <div class="stat-label">Турниров</div>
+                            </div>
+                        </div>
+                        <button class="warning" onclick="GlickoUI.resetPlayerSeason()">
+                            Сбросить сезонную статистику
+                        </button>
+                    </div>
+                </div>
+                <div id="tournaments-tab" class="tab-content">
+                    <h3>История турниров</h3>
+                    <div class="tournament-stats" id="tournamentStats"></div>
+                </div>
+                <div id="opponents-tab" class="tab-content">
+                    <h3>Статистика по соперникам</h3>
+                    <div class="opponent-stats" id="opponentStats"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="editGameModal" class="modal-overlay" style="display: none">
+            <div class="edit-game-modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">Редактировать игру</h2>
+                    <button class="close-modal" onclick="GlickoUI.closeEditGameModal()">
+                        ×
+                    </button>
+                </div>
+                <form id="editGameForm">
+                    <input type="hidden" id="editGameIndex" />
+                    <div class="form-group">
+                        <label for="editGameDate">Дата игры:</label
+                        ><input type="date" id="editGameDate" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Игроки и результаты:</label>
+                        <div class="form-row">
+                            <select id="editPlayer1Select" required>
+                                <option value="">Выберите игрока 1</option></select
+                            ><select id="editPlayer1Result" required>
+                                <option value="win">Победа</option>
+                                <option value="loss">Поражение</option>
+                                <option value="draw">Ничья</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <select id="editPlayer2Select" required>
+                                <option value="">Выберите игрока 2</option></select
+                            ><select id="editPlayer2Result" required>
+                                <option value="win">Победа</option>
+                                <option value="loss">Поражение</option>
+                                <option value="draw">Ничья</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button
+                            type="button"
+                            class="secondary"
+                            onclick="GlickoUI.closeEditGameModal()"
+                        >
+                            Отмена</button
+                        ><button type="submit" class="success">
+                            Сохранить изменения
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="editPlayerModal" class="modal-overlay" style="display: none">
+            <div class="edit-player-modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">Редактировать игрока</h2>
+                    <button class="close-modal" onclick="GlickoUI.closeEditPlayerModal()">
+                        ×
+                    </button>
+                </div>
+                <form id="editPlayerForm">
+                    <input type="hidden" id="editPlayerOriginalName" />
+                    <div class="form-group">
+                        <label for="editPlayerName">Имя игрока:</label
+                        ><input type="text" id="editPlayerName" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="editPlayerRating">Рейтинг:</label
+                        ><input type="number" id="editPlayerRating" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="editPlayerRD">RD:</label
+                        ><input
+                            type="number"
+                            id="editPlayerRD"
+                            required
+                            min="30"
+                            max="350"
+                        />
+                    </div>
+                    <div class="modal-actions">
+                        <button
+                            type="button"
+                            class="danger"
+                            onclick="GlickoUI.deletePlayer()"
+                        >
+                            Удалить игрока</button
+                        ><button
+                            type="button"
+                            class="secondary"
+                            onclick="GlickoUI.closeEditPlayerModal()"
+                        >
+                            Отмена</button
+                        ><button type="submit" class="success">
+                            Сохранить изменения
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="tournamentModal" class="modal-overlay" style="display: none">
+            <div class="tournament-modal">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="tournamentModalTitle">Турнир</h2>
+                    <button class="close-modal" onclick="GlickoUI.closeTournamentModal()">
+                        ×
+                    </button>
+                </div>
+                <div class="tournament-date-edit">
+                    <label for="editTournamentDate">Дата турнира:</label
+                    ><input type="date" id="editTournamentDate" /><button
+                        type="button"
+                        class="success"
+                        onclick="GlickoUI.updateTournamentDate()"
+                    >
+                        Обновить дату
+                    </button>
+                </div>
+                <h3>Игры турнира</h3>
+                <div class="tournament-games-list" id="tournamentGamesList"></div>
+                <div class="tournament-batch-actions">
+                    <button
+                        type="button"
+                        class="warning"
+                        onclick="GlickoUI.recalculateTournament()"
+                    >
+                        Пересчитать турнир</button
+                    ><button
+                        type="button"
+                        class="danger"
+                        onclick="GlickoUI.deleteTournament()"
+                    >
+                        Удалить весь турнир
+                    </button>
+                </div>
+                <div class="modal-actions">
+                    <button
+                        type="button"
+                        class="secondary"
+                        onclick="GlickoUI.closeTournamentModal()"
+                    >
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="seasonDatePickerModal" class="modal-overlay" style="display: none">
+            <div class="edit-game-modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">Сброс сезона</h2>
+                    <button class="close-modal" onclick="GlickoUI.cancelSeasonReset()">
+                        ×
+                    </button>
+                </div>
+                <div class="warning-box" style="margin-bottom: 15px">
+                    <strong>Внимание!</strong> После сброса сезона будут учитываться
+                    только игры, проведенные после выбранной даты.
+                </div>
+                <div class="form-group">
+                    <label for="seasonResetDate">Дата начала нового сезона:</label
+                    ><input type="date" id="seasonResetDate" required />
+                </div>
+                <div class="modal-actions">
+                    <button
+                        type="button"
+                        class="secondary"
+                        onclick="GlickoUI.cancelSeasonReset()"
+                    >
+                        Отмена</button
+                    ><button
+                        type="button"
+                        class="warning"
+                        onclick="GlickoUI.confirmSeasonReset()"
+                    >
+                        Сбросить сезон
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <script src="glicko-storage.js"></script>
+        <script src="glicko-math.js"></script>
+        <script src="glicko-ui.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const today = new Date().toISOString().split('T')[0];
+                const dateInput = document.getElementById('gameDate');
+                if (dateInput) dateInput.value = today;
+
+                const settings = GlickoStorage.getSeasonSettings();
+                if (!settings.seasonStartDate)
+                    GlickoStorage.saveSeasonSettings({ seasonStartDate: null });
+
+                GlickoMath.recalculateSeasonStats();
+                GlickoUI.displayPlayerList(false);
+                GlickoUI.populatePlayerSelects();
+                GlickoUI.displayRating();
+                GlickoUI.displayHistory();
+                GlickoUI.setupSorting();
+                GlickoUI.addGameToForm(false);
+
+                document
+                    .getElementById('goToSwissBtn')
+                    .addEventListener(
+                        'click',
+                        () => (window.location.href = 'swiss.html')
+                    );
+                document
+                    .getElementById('addPlayerForm')
+                    .addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        const playerName = document
+                            .getElementById('playerName')
+                            .value.trim();
+                        if (!playerName) {
+                            alert('Введите имя');
+                            return;
+                        }
+                        if (GlickoUI.addPlayer(playerName)) {
+                            GlickoUI.displayPlayerList(false);
+                            GlickoUI.populatePlayerSelects();
+                            GlickoUI.displayRating();
+                            document.getElementById('addPlayerForm').reset();
+                            alert(`Игрок "${playerName}" добавлен!`);
+                        }
+                    });
+
+                document
+                    .getElementById('addGameBtn')
+                    .addEventListener('click', () => GlickoUI.addGameToForm(false));
+                document
+                    .getElementById('addByeGameBtn')
+                    .addEventListener('click', () => GlickoUI.addGameToForm(true));
+                document
+                    .getElementById('clearGamesBtn')
+                    .addEventListener('click', () => GlickoUI.clearAllGames());
+
+                document
+                    .getElementById('gamesForm')
+                    .addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        const date = document.getElementById('gameDate').value;
+                        if (!date) {
+                            alert('Введите дату');
+                            return;
+                        }
+                        const gameEntries = document.querySelectorAll('.game-entry');
+                        if (gameEntries.length === 0) {
+                            alert('Добавьте хотя бы одну игру');
+                            return;
+                        }
+                        const gamesData = [];
+                        let hasErrors = false;
+                        gameEntries.forEach((entry, idx) => {
+                            const player1 = entry.querySelector('.player1-select')?.value;
+                            if (!player1) {
+                                alert(`В игре ${idx + 1} не выбран игрок`);
+                                hasErrors = true;
+                                return;
+                            }
+                            if (entry.querySelector('.is-bye-checkbox')) {
+                                gamesData.push({ player1, result1: 'win', isBye: true });
+                            } else {
+                                const player2 =
+                                    entry.querySelector('.player2-select')?.value;
+                                const result1 =
+                                    entry.querySelector('.player1-result')?.value;
+                                const result2 =
+                                    entry.querySelector('.player2-result')?.value;
+                                if (!player2) {
+                                    alert(`В игре ${idx + 1} не выбран второй игрок`);
+                                    hasErrors = true;
+                                    return;
+                                }
+                                if (player1 === player2) {
+                                    alert(
+                                        `В игре ${
+                                            idx + 1
+                                        } выбран один и тот же игрок дважды`
+                                    );
+                                    hasErrors = true;
+                                    return;
+                                }
+                                if (
+                                    (result1 === 'win' && result2 === 'win') ||
+                                    (result1 === 'loss' && result2 === 'loss')
+                                ) {
+                                    alert(
+                                        `Ошибка в игре ${
+                                            idx + 1
+                                        }: оба игрока не могут одновременно победить или проиграть`
+                                    );
+                                    hasErrors = true;
+                                    return;
+                                }
+                                gamesData.push({
+                                    player1,
+                                    player2,
+                                    result1,
+                                    result2,
+                                    isBye: false,
+                                });
+                            }
+                        });
+                        if (hasErrors) return;
+                        if (GlickoUI.addGames(date, gamesData)) {
+                            GlickoUI.displayPlayerList(false);
+                            GlickoUI.displayRating();
+                            GlickoUI.displayHistory();
+                            GlickoUI.clearAllGames();
+                            alert(`Добавлено ${gamesData.length} игр!`);
+                        }
+                    });
+
+                document
+                    .getElementById('exportData')
+                    .addEventListener('click', function () {
+                        const data = {
+                            players: GlickoStorage.getPlayers(),
+                            games: GlickoStorage.getGames(),
+                            seasonStats: GlickoStorage.getSeasonStats(),
+                            seasonSettings: GlickoStorage.getSeasonSettings(),
+                        };
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(
+                            new Blob([JSON.stringify(data, null, 2)], {
+                                type: 'application/json',
+                            })
+                        );
+                        a.download = 'glicko_data.json';
+                        a.click();
+                        URL.revokeObjectURL(a.href);
+                    });
+
+                document
+                    .getElementById('importData')
+                    .addEventListener('click', function () {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.json';
+                        input.onchange = (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                                try {
+                                    const data = JSON.parse(ev.target.result);
+                                    if (data.players && data.games) {
+                                        GlickoStorage.savePlayers(data.players);
+                                        GlickoStorage.saveGames(data.games);
+                                        if (data.seasonStats)
+                                            GlickoStorage.saveSeasonStats(
+                                                data.seasonStats
+                                            );
+                                        if (data.seasonSettings)
+                                            GlickoStorage.saveSeasonSettings(
+                                                data.seasonSettings
+                                            );
+                                        GlickoMath.recalculateAllRatings();
+                                        GlickoUI.displayPlayerList(false);
+                                        GlickoUI.populatePlayerSelects();
+                                        GlickoUI.displayRating();
+                                        GlickoUI.displayHistory();
+                                        alert('Данные импортированы!');
+                                    } else alert('Неверный формат');
+                                } catch (err) {
+                                    alert('Ошибка: ' + err.message);
+                                }
+                            };
+                            reader.readAsText(file);
+                        };
+                        input.click();
+                    });
+
+                document
+                    .getElementById('resetData')
+                    .addEventListener('click', function () {
+                        if (confirm('Сбросить ВСЕ данные?')) {
+                            localStorage.removeItem(GlickoStorage.STORAGE_KEYS.PLAYERS);
+                            localStorage.removeItem(GlickoStorage.STORAGE_KEYS.GAMES);
+                            localStorage.removeItem(
+                                GlickoStorage.STORAGE_KEYS.SEASON_STATS
+                            );
+                            localStorage.removeItem(
+                                GlickoStorage.STORAGE_KEYS.SEASON_SETTINGS
+                            );
+                            GlickoUI.displayPlayerList(false);
+                            GlickoUI.populatePlayerSelects();
+                            GlickoUI.displayRating();
+                            GlickoUI.displayHistory();
+                            GlickoUI.clearAllGames();
+                            alert('Все данные сброшены');
+                        }
+                    });
+
+                document
+                    .getElementById('toggleInactivePlayers')
+                    .addEventListener('click', () => {
+                        showInactivePlayers = !showInactivePlayers;
+                        const btn = document.getElementById('toggleInactivePlayers');
+                        btn.textContent = showInactivePlayers
+                            ? 'Скрыть неактивных'
+                            : 'Показать всех';
+                        btn.classList.toggle('warning', showInactivePlayers);
+                        GlickoUI.displayPlayerList(showInactivePlayers);
+                    });
+
+                document
+                    .getElementById('resetSeasonBtn')
+                    .addEventListener('click', () => GlickoUI.resetSeason());
+
+                document
+                    .getElementById('editGameForm')
+                    .addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        const gameIndex = parseInt(
+                            document.getElementById('editGameIndex').value
+                        );
+                        const date = document.getElementById('editGameDate').value;
+                        const player1 =
+                            document.getElementById('editPlayer1Select').value;
+                        const player2 =
+                            document.getElementById('editPlayer2Select').value;
+                        const result1 =
+                            document.getElementById('editPlayer1Result').value;
+                        const result2 =
+                            document.getElementById('editPlayer2Result').value;
+                        const games = GlickoStorage.getGames();
+                        if (player2 && player2 !== '') {
+                            games[gameIndex] = {
+                                ...games[gameIndex],
+                                date,
+                                player1,
+                                player2,
+                                result1,
+                                result2,
+                                type: 'Обычная',
+                            };
+                        } else {
+                            games[gameIndex] = {
+                                ...games[gameIndex],
+                                date,
+                                player1,
+                                result1: 'win',
+                                player2: 'BYE',
+                                result2: 'loss',
+                                type: 'BYE',
+                            };
+                        }
+                        GlickoStorage.saveGames(games);
+                        GlickoMath.recalculateAllRatings();
+                        GlickoUI.displayRating();
+                        GlickoUI.displayHistory();
+                        GlickoUI.closeEditGameModal();
+                        alert('Игра обновлена');
+                    });
+
+                document
+                    .getElementById('editPlayerForm')
+                    .addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        const originalName = document.getElementById(
+                            'editPlayerOriginalName'
+                        ).value;
+                        const newName = document
+                            .getElementById('editPlayerName')
+                            .value.trim();
+                        const rating = parseInt(
+                            document.getElementById('editPlayerRating').value
+                        );
+                        const rd = parseInt(
+                            document.getElementById('editPlayerRD').value
+                        );
+                        if (!newName) {
+                            alert('Введите имя');
+                            return;
+                        }
+                        const players = GlickoStorage.getPlayers();
+                        const games = GlickoStorage.getGames();
+                        if (originalName !== newName) {
+                            if (players[newName]) {
+                                alert('Игрок с таким именем уже существует');
+                                return;
+                            }
+                            games.forEach((game) => {
+                                if (game.player1 === originalName) game.player1 = newName;
+                                if (game.player2 === originalName) game.player2 = newName;
+                            });
+                            players[newName] = players[originalName];
+                            delete players[originalName];
+                        }
+                        players[newName].rating = rating;
+                        players[newName].rd = rd;
+                        GlickoStorage.savePlayers(players);
+                        GlickoStorage.saveGames(games);
+                        GlickoMath.recalculateAllRatings();
+                        GlickoUI.displayRating();
+                        GlickoUI.displayHistory();
+                        GlickoUI.displayPlayerList(showInactivePlayers);
+                        GlickoUI.closeEditPlayerModal();
+                        alert('Профиль обновлен');
+                    });
+
+                window.showInactivePlayers = false;
+            });
+        </script>
+    </body>
+</html>

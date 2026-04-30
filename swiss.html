@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, user-scalable=yes"
+        />
+        <title>Турниры по Швейцарской системе</title>
+        <link rel="stylesheet" href="swiss.css" />
+    </head>
+    <body>
+        <div class="container">
+            <div class="card">
+                <div class="tournament-bar">
+                    <div>
+                        <h1>♟️ Швейцарка</h1>
+                    </div>
+                    <div class="nav-links">
+                        <div id="syncStatus" class="sync-status">🔄 Загрузка...</div>
+                        <button id="goToGlickoBtn" class="nav-btn">📊 К рейтингу</button>
+                    </div>
+                </div>
+                <div class="tournament-selector">
+                    <div class="tournament-selector-header">
+                        <h3 style="margin: 0">🏆 Турниры</h3>
+                        <div class="action-buttons">
+                            <button id="newTournamentBtn" class="success">
+                                ➕ Новый
+                            </button>
+                            <button
+                                id="archiveAllCompletedBtn"
+                                class="info-btn btn-small"
+                                title="Завершенные турниры в архив"
+                            >
+                                📦 Архив завершенных
+                            </button>
+                            <button
+                                id="cleanupOldTournamentsBtn"
+                                class="warning-btn btn-small"
+                                title="Удалить турниры старше 30 дней"
+                            >
+                                🗑 Очистить старые
+                            </button>
+                        </div>
+                    </div>
+                    <div class="tournament-sections" id="tournamentSections">
+                        <!-- Активные турниры -->
+                        <div class="tournament-section" id="activeTournamentsSection">
+                            <div
+                                class="tournament-section-header"
+                                onclick="window.toggleSection('activeSection')"
+                            >
+                                <h3>
+                                    🎯 Активные турниры
+                                    <span id="activeCount" class="section-badge">0</span>
+                                </h3>
+                                <span class="toggle-icon" id="activeSectionIcon">▼</span>
+                            </div>
+                            <div
+                                class="tournament-section-content"
+                                id="activeSectionContent"
+                            >
+                                <div
+                                    id="activeTournamentList"
+                                    class="tournament-list"
+                                ></div>
+                            </div>
+                        </div>
+                        <!-- Архивные турниры -->
+                        <div class="tournament-section" id="archivedTournamentsSection">
+                            <div
+                                class="tournament-section-header"
+                                onclick="window.toggleSection('archivedSection')"
+                            >
+                                <h3>
+                                    📦 Архивные турниры
+                                    <span id="archivedCount" class="section-badge"
+                                        >0</span
+                                    >
+                                </h3>
+                                <span class="toggle-icon" id="archivedSectionIcon"
+                                    >▼</span
+                                >
+                            </div>
+                            <div
+                                class="tournament-section-content"
+                                id="archivedSectionContent"
+                            >
+                                <div
+                                    id="archivedTournamentList"
+                                    class="tournament-list"
+                                ></div>
+                                <div class="archive-actions">
+                                    <button
+                                        id="clearAllArchivedBtn"
+                                        class="danger btn-small"
+                                    >
+                                        🗑 Удалить все архивные
+                                    </button>
+                                    <button
+                                        id="unarchiveAllBtn"
+                                        class="info-btn btn-small"
+                                    >
+                                        📤 Восстановить все
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="flex-row">
+                    <div class="input-group">
+                        <label>Игрок из Базы Данных</label>
+                        <select id="playerSelectFromDB"></select>
+                    </div>
+                    <button id="addFromDBBtn" class="success">➕ Добавить</button>
+                    <div style="width: 1px; background: #ddd"></div>
+                    <div class="input-group">
+                        <label>Вручную</label>
+                        <input type="text" id="playerNameInput" placeholder="Имя" />
+                    </div>
+                    <button id="addPlayerBtn" class="primary">➕ Добавить</button>
+                    <div class="input-group" style="max-width: 90px">
+                        <label>Туры</label>
+                        <input
+                            type="number"
+                            id="maxRoundsInput"
+                            min="1"
+                            max="15"
+                            value="3"
+                        />
+                    </div>
+
+                    <button id="setMaxRoundsBtn" class="warning">🎯 Установить</button>
+                </div>
+                <div style="margin: 8px 0; display: flex; gap: 8px; flex-wrap: wrap">
+                    <button id="syncPlayersBtn" class="warning">
+                        🔄 Синхр. из Глико
+                    </button>
+                    <button id="addByePlayerBtn" class="warning">
+                        👤 Добавить "Баев Бай"
+                    </button>
+                    <span style="font-size: 0.7rem; color: #666"
+                        >🏆 Победа над BYE: +3 очка в турнире, +5 рейтинга</span
+                    >
+                </div>
+                <div id="playersContainer" class="players-grid"></div>
+                <div id="playerCountWarning" class="error-message"></div>
+            </div>
+
+            <div class="card">
+                <div
+                    style="
+                        display: flex;
+                        justify-content: space-between;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                        margin-bottom: 12px;
+                    "
+                >
+                    <h2>
+                        🏆 <span id="tournamentName"></span> <span id="roundsInfo"></span>
+                    </h2>
+                    <div class="action-buttons">
+                        <button id="nextRoundBtn" class="primary">
+                            🎲 Следующий тур
+                        </button>
+                        <button id="manualPairingBtn" class="warning">
+                            ✋ Ручные пары
+                        </button>
+                        <button id="reshuffleBtn" class="warning">
+                            🔄 Пережеребьевка
+                        </button>
+                        <button id="submitTournamentBtn" class="submit-tournament">
+                            📊 Засчитать в рейтинг
+                        </button>
+                    </div>
+                </div>
+                <div style="overflow-x: auto; max-height: 450px; overflow-y: auto">
+                    <table class="standings-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Игрок</th>
+                                <th>Очки</th>
+                                <th>В</th>
+                                <th>Н</th>
+                                <th>Бухгольц</th>
+                                <th>Медведев</th>
+                            </tr>
+                        </thead>
+                        <tbody id="standingsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📋 Туры</h2>
+                <div id="roundsHistory" class="rounds-grid"></div>
+            </div>
+        </div>
+
+        <!-- Подключаем скрипты -->
+        <script src="glicko-storage.js"></script>
+        <script src="glicko-math.js"></script>
+        <script src="swiss-core.js"></script>
+        <script src="swiss-ui.js"></script>
+        <script>
+            // Инициализация при загрузке страницы
+            if (typeof initSwiss === 'function') {
+                initSwiss();
+            } else {
+                console.error('initSwiss function not found');
+                document.addEventListener('DOMContentLoaded', function () {
+                    if (typeof initSwiss === 'function') initSwiss();
+                    else
+                        alert(
+                            'Ошибка загрузки скриптов. Проверьте файлы: swiss-core.js, swiss-ui.js'
+                        );
+                });
+            }
+        </script>
+    </body>
+</html>
