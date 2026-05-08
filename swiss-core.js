@@ -1,4 +1,4 @@
-// ==================== ШВЕЙЦАРСКАЯ СИСТЕМА - ЯДРО ====================
+// ==================== ШВЕЙЦАРСКАЯ СИСТЕМА - ЯДРО (ИСПРАВЛЕННАЯ ВЕРСИЯ) ====================
 
 const POINTS_WIN = 3,
     POINTS_DRAW = 1,
@@ -57,7 +57,7 @@ function loadSwissFromLocal() {
         currentTournamentId = allTournaments[0].id;
 }
 
-// Геттеры и сеттеры для доступа из UI
+// Геттеры и сеттеры
 function getAllTournaments() {
     return allTournaments;
 }
@@ -102,7 +102,7 @@ function createNewTournament() {
     saveSwissToLocal();
 }
 
-// Логика пар
+// Получение списка уже сыгранных оппонентов
 function getPlayedOpponents(t, playerId) {
     const opponents = new Set();
     t.rounds.forEach((round) => {
@@ -128,93 +128,259 @@ function shuffleArray(arr) {
     }
 }
 
+// ========== НОВАЯ УЛУЧШЕННАЯ ЛОГИКА ПАРИНГОВ ==========
 function generatePairings(t, shuffleGroups = true) {
-    let players = [...t.players];
-    const byePlayer = players.find((p) => p.name === BYE_PLAYER_NAME);
-    let realPlayers = players.filter((p) => p.name !== BYE_PLAYER_NAME);
+    let realPlayers = t.players.filter((p) => p.name !== BYE_PLAYER_NAME);
+    const byePlayer = t.players.find((p) => p.name === BYE_PLAYER_NAME);
+
     if (realPlayers.length < 2) return [];
 
-    if (byePlayer && realPlayers.length % 2 !== 0) {
-        const playedWithBye = getPlayedOpponents(t, byePlayer.id);
-        let availableForBye = realPlayers.filter((p) => !playedWithBye.has(p.id));
-        if (availableForBye.length === 0) availableForBye = realPlayers;
-        const randomIndex = Math.floor(Math.random() * availableForBye.length);
-        const targetPlayer = availableForBye[randomIndex];
-        if (targetPlayer) {
-            const pairings = [{ p1Id: targetPlayer.id, p2Id: byePlayer.id }];
-            const remaining = realPlayers.filter((p) => p.id !== targetPlayer.id);
-            const remainingPairs = generatePairsWithoutBye(t, remaining, shuffleGroups);
-            return [...pairings, ...remainingPairs];
+    // Сортируем игроков по очкам (от большего к меньшему)
+    realPlayers.sort((a, b) => b.points - a.points);
+
+    // Проверка на необходимость BYE (нечетное количество игроков)
+    if (realPlayers.length % 2 !== 0) {
+        if (byePlayer) {
+            // Нужно назначить BYE игроку
+            return generatePairingsWithBye(t, realPlayers, byePlayer);
+        } else {
+            // Нет BYE-игрока - не можем создать пары
+            return [];
         }
     }
-    return generatePairsWithoutBye(t, realPlayers, shuffleGroups);
+
+    return generateSwissPairings(t, realPlayers, shuffleGroups);
 }
 
-function generatePairsWithoutBye(t, players, shuffleGroups = true) {
+function generatePairingsWithBye(t, players, byePlayer) {
+    // Находим кандидатов для BYE (игроки, которые еще не играли с BYE)
+    const playedWithBye = getPlayedOpponents(t, byePlayer.id);
+    let candidates = players.filter((p) => !playedWithBye.has(p.id));
+
+    // Если все уже играли с BYE, выбираем игрока с наименьшим количеством очков
+    if (candidates.length === 0) {
+        candidates = [...players];
+        candidates.sort((a, b) => a.points - b.points);
+    } else {
+        // Сортируем кандидатов: сначала те, у кого меньше очков (справедливее)
+        candidates.sort((a, b) => a.points - b.points);
+    }
+
+    const byeCandidate = candidates[0];
+    const remainingPlayers = players.filter((p) => p.id !== byeCandidate.id);
+
+    // Создаем пары для оставшихся игроков
+    const pairs = generateSwissPairings(t, remainingPlayers, true);
+
+    if (pairs) {
+        return [{ p1Id: byeCandidate.id, p2Id: byePlayer.id }, ...pairs];
+    }
+
+    return [];
+}
+
+function generateSwissPairings(t, players, shuffleGroups = true) {
     if (players.length % 2 !== 0) return [];
     if (players.length === 0) return [];
     if (players.length === 2) {
-        return canPlayTogether(t, players[0].id, players[1].id)
-            ? [{ p1Id: players[0].id, p2Id: players[1].id }]
-            : [];
+        if (canPlayTogether(t, players[0].id, players[1].id)) {
+            return [{ p1Id: players[0].id, p2Id: players[1].id }];
+        }
+        return [];
     }
 
+    // Группируем игроков по очкам
     let groups = new Map();
     players.forEach((p) => {
         const pts = p.points;
         if (!groups.has(pts)) groups.set(pts, []);
         groups.get(pts).push(p);
     });
+
+    // Получаем отсортированные группы (от большего к меньшему)
     let sortedGroups = Array.from(groups.keys()).sort((a, b) => b - a);
-    let allPlayers = [];
+
+    // Строим список игроков: сначала верхняя группа, потом следующая и т.д.
+    let sortedPlayers = [];
     sortedGroups.forEach((pts) => {
         let group = groups.get(pts);
         if (shuffleGroups) shuffleArray(group);
-        allPlayers.push(...group);
+        sortedPlayers.push(...group);
     });
-    if (shuffleGroups) shuffleArray(allPlayers);
 
-    let bestPairs = null,
-        bestScore = -1;
-    for (let attempt = 0; attempt < 6; attempt++) {
-        if (attempt > 0) shuffleArray(allPlayers);
-        const pairs = findValidPairings(t, allPlayers);
+    // Пытаемся найти лучшие пары с помощью алгоритма с возвратом
+    let bestPairs = null;
+    let bestScore = Infinity;
+
+    // Пробуем несколько перестановок для поиска лучшего решения
+    for (let attempt = 0; attempt < 10; attempt++) {
+        if (attempt > 0) {
+            // Перемешиваем внутри групп, но сохраняем порядок групп
+            let tempPlayers = [];
+            sortedGroups.forEach((pts) => {
+                let group = groups.get(pts);
+                shuffleArray(group);
+                tempPlayers.push(...group);
+            });
+            sortedPlayers = tempPlayers;
+        }
+
+        const pairs = findValidPairingsWithBacktracking(t, sortedPlayers);
+
         if (pairs) {
-            let score = pairs.reduce((sum, pair) => {
-                const p1 = allPlayers.find((p) => p.id === pair.p1Id),
-                    p2 = allPlayers.find((p) => p.id === pair.p2Id);
-                return sum + Math.abs((p1?.points || 0) - (p2?.points || 0));
-            }, 0);
-            if (bestPairs === null || score < bestScore) {
-                bestPairs = pairs;
-                bestScore = score;
+            // Оцениваем качество паринга (разница в очках)
+            let score = 0;
+            for (const pair of pairs) {
+                const p1 = players.find((p) => p.id === pair.p1Id);
+                const p2 = players.find((p) => p.id === pair.p2Id);
+                if (p1 && p2) {
+                    score += Math.abs(p1.points - p2.points);
+                }
             }
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestPairs = pairs;
+            }
+
+            // Если нашли идеальные пары (разница 0), выходим
+            if (bestScore === 0) break;
         }
     }
+
     return bestPairs || [];
 }
 
-function findValidPairings(t, players) {
+function findValidPairingsWithBacktracking(t, players) {
     if (players.length % 2 !== 0) return null;
     if (players.length === 0) return [];
-    for (let i = 0; i < players.length; i++) {
+
+    for (let i = 0; i < players.length - 1; i++) {
         for (let j = i + 1; j < players.length; j++) {
             if (canPlayTogether(t, players[i].id, players[j].id)) {
                 const remaining = players.filter((_, idx) => idx !== i && idx !== j);
-                const subResult = findValidPairings(t, remaining);
-                if (subResult !== null)
+                const subResult = findValidPairingsWithBacktracking(t, remaining);
+                if (subResult !== null) {
                     return [{ p1Id: players[i].id, p2Id: players[j].id }, ...subResult];
+                }
             }
         }
     }
     return null;
 }
 
+// Альтернативный метод пар для более сложных случаев (использует "скользящую" группировку)
+function generatePairingsSliding(t, shuffleGroups = true) {
+    let players = [...t.players.filter((p) => p.name !== BYE_PLAYER_NAME)];
+    const byePlayer = t.players.find((p) => p.name === BYE_PLAYER_NAME);
+
+    if (players.length < 2) return [];
+
+    // Сортируем по очкам (по убыванию)
+    players.sort((a, b) => b.points - a.points);
+
+    // Обработка BYE
+    if (players.length % 2 !== 0 && byePlayer) {
+        const playedWithBye = getPlayedOpponents(t, byePlayer.id);
+        let availableForBye = players.filter((p) => !playedWithBye.has(p.id));
+        if (availableForBye.length === 0) availableForBye = players;
+        availableForBye.sort((a, b) => a.points - b.points);
+        const byeTarget = availableForBye[0];
+        players = players.filter((p) => p.id !== byeTarget.id);
+        const pairs = generatePairingsSlidingInternal(t, players, shuffleGroups);
+        if (pairs) {
+            return [{ p1Id: byeTarget.id, p2Id: byePlayer.id }, ...pairs];
+        }
+        return [];
+    }
+
+    if (players.length % 2 !== 0) return [];
+
+    return generatePairingsSlidingInternal(t, players, shuffleGroups);
+}
+
+function generatePairingsSlidingInternal(t, players, shuffleGroups = true) {
+    if (players.length <= 2) {
+        if (players.length === 2 && canPlayTogether(t, players[0].id, players[1].id)) {
+            return [{ p1Id: players[0].id, p2Id: players[1].id }];
+        }
+        return [];
+    }
+
+    // Группировка по очкам
+    const pointsGroups = new Map();
+    players.forEach((p) => {
+        if (!pointsGroups.has(p.points)) pointsGroups.set(p.points, []);
+        pointsGroups.get(p.points).push(p);
+    });
+
+    const sortedPoints = Array.from(pointsGroups.keys()).sort((a, b) => b - a);
+    const result = [];
+    const used = new Set();
+
+    // Сначала пытаемся сопоставить игроков внутри одной группы
+    for (const points of sortedPoints) {
+        const group = pointsGroups.get(points).filter((p) => !used.has(p.id));
+        if (group.length >= 2) {
+            // Перемешиваем внутри группы для разнообразия
+            if (shuffleGroups) shuffleArray(group);
+
+            // Создаем пары внутри группы
+            const groupPairs = [];
+            for (let i = 0; i < group.length - 1; i++) {
+                for (let j = i + 1; j < group.length; j++) {
+                    if (canPlayTogether(t, group[i].id, group[j].id)) {
+                        groupPairs.push({ p1Id: group[i].id, p2Id: group[j].id });
+                        used.add(group[i].id);
+                        used.add(group[j].id);
+                        break;
+                    }
+                }
+                if (used.has(group[i].id)) break;
+            }
+            result.push(...groupPairs);
+        }
+    }
+
+    // Оставшиеся игроки (которых не удалось спарить внутри групп)
+    let remaining = players.filter((p) => !used.has(p.id));
+
+    // Сортируем оставшихся по очкам и пытаемся спарить
+    if (remaining.length > 0) {
+        remaining.sort((a, b) => b.points - a.points);
+
+        for (let i = 0; i < remaining.length - 1; i++) {
+            if (used.has(remaining[i].id)) continue;
+            for (let j = i + 1; j < remaining.length; j++) {
+                if (used.has(remaining[j].id)) continue;
+                if (canPlayTogether(t, remaining[i].id, remaining[j].id)) {
+                    result.push({ p1Id: remaining[i].id, p2Id: remaining[j].id });
+                    used.add(remaining[i].id);
+                    used.add(remaining[j].id);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Если кого-то не удалось спарить - пробуем рекурсивно переставить
+    if (result.length * 2 !== players.length) {
+        // Перемешиваем и пробуем снова
+        if (shuffleGroups) {
+            const shuffledPlayers = [...players];
+            shuffleArray(shuffledPlayers);
+            return generatePairingsSlidingInternal(t, shuffledPlayers, false);
+        }
+        return [];
+    }
+
+    return result;
+}
+
 // Расчет статистики
 function recalcAllStats(t) {
     if (!t) return;
 
-    // Инициализация всех игроков
     t.players.forEach((p) => {
         p.points = p.points || 0;
         p.buchholz = p.buchholz || 0;
@@ -225,7 +391,6 @@ function recalcAllStats(t) {
         p.medvedev = p.medvedev || 0;
     });
 
-    // Сброс перед пересчетом
     t.players.forEach((p) => {
         p.points = 0;
         p.buchholz = 0;
@@ -236,7 +401,6 @@ function recalcAllStats(t) {
         p.medvedev = 0;
     });
 
-    // Подсчет очков
     t.rounds.forEach((round) => {
         round.matches.forEach((match) => {
             if (!match.completed) return;
@@ -245,14 +409,12 @@ function recalcAllStats(t) {
             const p2 = t.players.find((p) => p.id === match.p2Id);
             if (!p1 || !p2) return;
 
-            // Запись соперников
             if (!p1.opponents.includes(p2.id)) p1.opponents.push(p2.id);
             if (!p2.opponents.includes(p1.id)) p2.opponents.push(p1.id);
 
             p1.matchesCount++;
             p2.matchesCount++;
 
-            // Начисление очков
             if (p1.name === BYE_PLAYER_NAME) {
                 p2.points += POINTS_WIN;
                 p2.wins++;
@@ -276,7 +438,6 @@ function recalcAllStats(t) {
         });
     });
 
-    // Подсчет Бухгольца
     t.players.forEach((p) => {
         p.buchholz = p.opponents.reduce((sum, oid) => {
             const opponent = t.players.find((op) => op.id === oid);
@@ -284,7 +445,6 @@ function recalcAllStats(t) {
         }, 0);
     });
 
-    // Подсчет Медведева (усеченный Бухгольц - без худшего соперника)
     t.players.forEach((p) => {
         if (p.opponents.length > 0) {
             const oppScores = p.opponents
@@ -295,24 +455,11 @@ function recalcAllStats(t) {
                 .sort((a, b) => a - b);
 
             let sum = oppScores.reduce((a, b) => a + b, 0);
-            if (oppScores.length > 0) sum -= oppScores[0]; // Убираем худшего соперника
+            if (oppScores.length > 0) sum -= oppScores[0];
             p.medvedev = sum;
         } else {
             p.medvedev = 0;
         }
-    });
-}
-
-function calculateMedvedev(t) {
-    t.players.forEach((p) => {
-        if (p.opponents.length) {
-            const oppScores = p.opponents
-                .map((oid) => t.players.find((op) => op.id === oid)?.points || 0)
-                .sort((a, b) => a - b);
-            let sum = oppScores.reduce((a, b) => a + b, 0);
-            if (oppScores.length) sum -= oppScores[0];
-            p.medvedev = sum;
-        } else p.medvedev = 0;
     });
 }
 
@@ -393,11 +540,8 @@ function renamePlayerInTournament(t, playerId, newName) {
     }
 }
 
-// Функция добавления BYE-игрока
 function addByePlayerToTournament(t) {
-    console.log('addByePlayerToTournament called', t);
     if (!t) {
-        console.log('No tournament, creating new');
         createNewTournament();
         t = getCurrentTournament();
     }
@@ -422,7 +566,6 @@ function addByePlayerToTournament(t) {
         isByePlayer: true,
     });
     saveSwissToLocal();
-    console.log('BYE player added successfully');
     return true;
 }
 
@@ -441,20 +584,22 @@ function createNextRound(t) {
         alert('Минимум 2 игрока');
         return false;
     }
-    const pairings = generatePairings(t, true);
+
+    // Используем улучшенный алгоритм парингов
+    let pairings = generatePairings(t, true);
+
     if (!pairings || pairings.length === 0) {
         const hasBye = t.players.some((p) => p.name === BYE_PLAYER_NAME);
-        if (
-            !hasBye &&
-            realPlayers.length >= 2 &&
-            confirm('⚠️ Невозможно создать пары без повторов. Добавить "Баев Бай"?')
-        ) {
-            addByePlayerToTournament(t);
-            return createNextRound(t);
+        if (!hasBye && realPlayers.length % 2 !== 0) {
+            if (confirm('⚠️ Нечётное количество игроков. Добавить "Баев Бай"?')) {
+                addByePlayerToTournament(t);
+                return createNextRound(t);
+            }
         }
         alert('Не удалось создать пары. Проверьте повторные встречи.');
         return false;
     }
+
     const matches = pairings.map((pair) => ({
         p1Id: pair.p1Id,
         p2Id: pair.p2Id,
@@ -609,8 +754,8 @@ window.SwissCore = {
     getPlayedOpponents,
     canPlayTogether,
     generatePairings,
+    generatePairingsSliding,
     recalcAllStats,
-    calculateMedvedev,
     sortPlayers,
     addPlayerToTournament,
     removePlayerFromTournament,
