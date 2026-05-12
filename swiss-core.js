@@ -645,6 +645,8 @@ function submitTournamentToGlickoSystem(t, tournamentDate) {
             const p1 = t.players.find((p) => p.id === match.p1Id);
             const p2 = t.players.find((p) => p.id === match.p2Id);
 
+            if (!match.completed) return;
+
             if (p1?.name === BYE_PLAYER_NAME || p2?.name === BYE_PLAYER_NAME) {
                 const winner = p1?.name === BYE_PLAYER_NAME ? p2?.name : p1?.name;
                 if (winner && winner !== BYE_PLAYER_NAME) {
