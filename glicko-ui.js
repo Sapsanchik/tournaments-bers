@@ -610,10 +610,12 @@ function addGames(date, gamesData) {
             const ratingDiff = Math.abs(
                 tempPlayers[player1].rating - tempPlayers[player2].rating
             );
+            const player1BeforeGame = { ...tempPlayers[player1] };
+            const player2BeforeGame = { ...tempPlayers[player2] };
 
             const updatedPlayer1 = GlickoMath.updateRatingExact(
-                tempPlayers[player1],
-                tempPlayers[player2],
+                player1BeforeGame,
+                player2BeforeGame,
                 numResult1,
                 currentTime
             );
@@ -625,8 +627,8 @@ function addGames(date, gamesData) {
             };
 
             const updatedPlayer2 = GlickoMath.updateRatingExact(
-                tempPlayers[player2],
-                tempPlayers[player1],
+                player2BeforeGame,
+                player1BeforeGame,
                 numResult2,
                 currentTime
             );
