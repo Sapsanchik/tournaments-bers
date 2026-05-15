@@ -1331,3 +1331,61 @@ tr:hover {
         font-size: 11px;
     }
 }
+
+/* Добавления для чемпионатных игр */
+
+.edit-championship-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.edit-championship-btn:hover {
+    background: #2980b9;
+}
+
+.championship-games-value {
+    font-weight: 500;
+    color: #2c3e50;
+}
+
+.total-games-cell {
+    font-weight: bold;
+    color: #2ecc71;
+}
+
+/* Обновление адаптивных стилей - добавьте в медиа-запрос */
+
+@media (max-width: 768px) {
+    /* ... существующие стили ... */
+
+    #ratingBody tr td:nth-child(1):before {
+        content: 'Место';
+    }
+    #ratingBody tr td:nth-child(2):before {
+        content: 'Игрок';
+    }
+    #ratingBody tr td:nth-child(3):before {
+        content: 'Рейтинг';
+    }
+    #ratingBody tr td:nth-child(4):before {
+        content: 'RD';
+    }
+    #ratingBody tr td:nth-child(5):before {
+        content: 'Игр в чемпионате';
+    }
+    #ratingBody tr td:nth-child(6):before {
+        content: 'Игр в сезоне';
+    }
+    #ratingBody tr td:nth-child(7):before {
+        content: 'Всего игр';
+    }
+    #ratingBody tr td:nth-child(8):before {
+        content: 'Турниров';
+    }
+    #ratingBody tr td:nth-child(9):before {
+        content: 'Последнее обновление';
+    }
+}

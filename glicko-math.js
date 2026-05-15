@@ -15,6 +15,17 @@ function expectedScore(rating, opponentRating, opponentRD) {
     return 1 / (1 + Math.pow(10, (-g(opponentRD) * (rating - opponentRating)) / 400));
 }
 
+function calculateCurrentRD(player, currentTime) {
+    const daysSinceLastUpdate = Math.max(
+        (currentTime - player.lastUpdate) / (1000 * 60 * 60 * 24),
+        0
+    );
+    return Math.min(
+        Math.sqrt(player.rd * player.rd + C * C * daysSinceLastUpdate),
+        INITIAL_RD
+    );
+}
+
 function calculateKFactor(player, opponent, result, expected) {
     let kFactor = 32;
     const surprise = Math.abs(result - expected);
@@ -37,17 +48,11 @@ function calculateKFactor(player, opponent, result, expected) {
 }
 
 function updateRatingExact(player, opponent, result, currentTime) {
-    const daysSinceLastUpdate = Math.max(
-        (currentTime - player.lastUpdate) / (1000 * 60 * 60 * 24),
-        0
-    );
-    const newRD = Math.min(
-        Math.sqrt(player.rd * player.rd + C * C * daysSinceLastUpdate),
-        INITIAL_RD
-    );
-    const E = expectedScore(player.rating, opponent.rating, newRD);
+    const newRD = calculateCurrentRD(player, currentTime);
+    const opponentRD = calculateCurrentRD(opponent, currentTime);
+    const E = expectedScore(player.rating, opponent.rating, opponentRD);
     const kFactor = calculateKFactor(player, opponent, result, E);
-    const dSquared = 1 / (Q * Q * g(newRD) * g(newRD) * E * (1 - E));
+    const dSquared = 1 / (Q * Q * g(opponentRD) * g(opponentRD) * E * (1 - E));
     const ratingChange = kFactor * (result - E);
     const limitedRatingChange = Math.max(Math.min(ratingChange, 100), -100);
     const newRating = player.rating + limitedRatingChange;
@@ -265,10 +270,12 @@ function addSwissTournamentToGlicko(gamesData, tournamentDate) {
         const ratingDiff = Math.abs(
             tempPlayers[player1].rating - tempPlayers[player2].rating
         );
+        const player1BeforeGame = { ...tempPlayers[player1] };
+        const player2BeforeGame = { ...tempPlayers[player2] };
 
         const updatedPlayer1 = updateRatingExact(
-            tempPlayers[player1],
-            tempPlayers[player2],
+            player1BeforeGame,
+            player2BeforeGame,
             numResult1,
             currentTime
         );
@@ -280,8 +287,8 @@ function addSwissTournamentToGlicko(gamesData, tournamentDate) {
         };
 
         const updatedPlayer2 = updateRatingExact(
-            tempPlayers[player2],
-            tempPlayers[player1],
+            player2BeforeGame,
+            player1BeforeGame,
             numResult2,
             currentTime
         );
@@ -361,6 +368,7 @@ window.GlickoMath = {
     g,
     expectedScore,
     calculateKFactor,
+    calculateCurrentRD,
     updateRatingExact,
     updateRatingForByeExact,
     recalculateAllRatings,

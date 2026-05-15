@@ -98,7 +98,9 @@
                     <div class="sort-controls">
                         <select id="sortBy">
                             <option value="rating">По рейтингу</option>
-                            <option value="games">По количеству игр</option>
+                            <option value="championship">По играм в чемпионате</option>
+                            <option value="season">По играм в сезоне</option>
+                            <option value="games">По общему количеству игр</option>
                             <option value="tournaments">По количеству турниров</option>
                             <option value="name">По имени</option>
                             <option value="rd">По RD (нестабильности)</option>
@@ -116,7 +118,11 @@
                             <th class="sortable" data-sort="name">Игрок</th>
                             <th class="sortable" data-sort="rating">Рейтинг</th>
                             <th class="sortable" data-sort="rd">RD</th>
-                            <th class="sortable" data-sort="games">Игр в сезоне</th>
+                            <th class="sortable" data-sort="championship">
+                                Игр в чемпионате
+                            </th>
+                            <th class="sortable" data-sort="season">Игр в сезоне</th>
+                            <th class="sortable" data-sort="games">Всего игр</th>
                             <th class="sortable" data-sort="tournaments">Турниров</th>
                             <th class="sortable" data-sort="lastUpdate">
                                 Последнее обновление
@@ -205,6 +211,14 @@
                         <div class="stat-card">
                             <div class="stat-value" id="modalTotalGames">0</div>
                             <div class="stat-label">Игр в сезоне</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="modalChampionshipGames">0</div>
+                            <div class="stat-label">Игр в чемпионате</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="modalTotalAllGames">0</div>
+                            <div class="stat-label">Всего игр</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-value" id="modalTournamentsCount">0</div>
@@ -571,6 +585,9 @@
                             games: GlickoStorage.getGames(),
                             seasonStats: GlickoStorage.getSeasonStats(),
                             seasonSettings: GlickoStorage.getSeasonSettings(),
+                            championshipGames: window.getChampionshipGames
+                                ? window.getChampionshipGames()
+                                : {},
                         };
                         const a = document.createElement('a');
                         a.href = URL.createObjectURL(
@@ -607,6 +624,16 @@
                                             GlickoStorage.saveSeasonSettings(
                                                 data.seasonSettings
                                             );
+                                        if (
+                                            data.championshipGames &&
+                                            window.setChampionshipGames
+                                        ) {
+                                            Object.entries(
+                                                data.championshipGames
+                                            ).forEach(([name, count]) => {
+                                                window.setChampionshipGames(name, count);
+                                            });
+                                        }
                                         GlickoMath.recalculateAllRatings();
                                         GlickoUI.displayPlayerList(false);
                                         GlickoUI.populatePlayerSelects();
@@ -635,6 +662,7 @@
                             localStorage.removeItem(
                                 GlickoStorage.STORAGE_KEYS.SEASON_SETTINGS
                             );
+                            localStorage.removeItem('glickoChampionshipGames');
                             GlickoUI.displayPlayerList(false);
                             GlickoUI.populatePlayerSelects();
                             GlickoUI.displayRating();
@@ -728,6 +756,10 @@
                         }
                         const players = GlickoStorage.getPlayers();
                         const games = GlickoStorage.getGames();
+                        const championshipGames = window.getChampionshipGames
+                            ? window.getChampionshipGames()
+                            : {};
+
                         if (originalName !== newName) {
                             if (players[newName]) {
                                 alert('Игрок с таким именем уже существует');
@@ -739,6 +771,15 @@
                             });
                             players[newName] = players[originalName];
                             delete players[originalName];
+
+                            // Переносим данные чемпионата
+                            if (championshipGames[originalName] !== undefined) {
+                                championshipGames[newName] =
+                                    championshipGames[originalName];
+                                delete championshipGames[originalName];
+                                if (window.saveChampionshipGames)
+                                    window.saveChampionshipGames(championshipGames);
+                            }
                         }
                         players[newName].rating = rating;
                         players[newName].rd = rd;

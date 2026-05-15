@@ -14,6 +14,72 @@ function getResultText(result) {
     return map[result] || result;
 }
 
+// ==================== УПРАВЛЕНИЕ ИГРАМИ В ЧЕМПИОНАТЕ ====================
+
+function getChampionshipGames() {
+    const games = localStorage.getItem('glickoChampionshipGames');
+    return games ? JSON.parse(games) : {};
+}
+
+function saveChampionshipGames(games) {
+    localStorage.setItem('glickoChampionshipGames', JSON.stringify(games));
+}
+
+function addChampionshipGame(playerName) {
+    const championshipGames = getChampionshipGames();
+    if (!championshipGames[playerName]) {
+        championshipGames[playerName] = 0;
+    }
+    championshipGames[playerName]++;
+    saveChampionshipGames(championshipGames);
+    return championshipGames[playerName];
+}
+
+function setChampionshipGames(playerName, count) {
+    const championshipGames = getChampionshipGames();
+    championshipGames[playerName] = Math.max(0, parseInt(count) || 0);
+    saveChampionshipGames(championshipGames);
+    return championshipGames[playerName];
+}
+
+function getPlayerChampionshipGames(playerName) {
+    const championshipGames = getChampionshipGames();
+    return championshipGames[playerName] || 0;
+}
+
+function getTotalSeasonGames(playerName) {
+    const seasonStats = GlickoStorage.getSeasonStats();
+    const seasonGames = seasonStats[playerName]?.games || 0;
+    const championshipGames = getPlayerChampionshipGames(playerName);
+    return seasonGames + championshipGames;
+}
+
+function editChampionshipGames(playerName, event) {
+    if (event) event.stopPropagation();
+
+    const currentCount = getPlayerChampionshipGames(playerName);
+    const newCount = prompt(
+        `Введите количество игр в чемпионате для игрока "${playerName}":`,
+        currentCount
+    );
+
+    if (newCount !== null && !isNaN(parseInt(newCount))) {
+        setChampionshipGames(playerName, parseInt(newCount));
+        displayRating();
+        // Обновляем модальное окно, если оно открыто
+        const modalPlayerName = document.getElementById('modalPlayerName')?.textContent;
+        if (
+            modalPlayerName === playerName &&
+            document.getElementById('playerModal').style.display === 'flex'
+        ) {
+            openPlayerModal(playerName);
+        }
+        alert(`Для игрока "${playerName}" установлено ${newCount} игр в чемпионате`);
+    } else if (newCount !== null) {
+        alert('Пожалуйста, введите корректное число');
+    }
+}
+
 // ==================== УПРАВЛЕНИЕ ИГРОКАМИ ====================
 function addPlayer(name) {
     const players = GlickoStorage.getPlayers();
@@ -70,12 +136,17 @@ function deletePlayer(playerName = null) {
     if (!playerName) playerName = document.getElementById('editPlayerOriginalName').value;
     const players = GlickoStorage.getPlayers();
     const games = GlickoStorage.getGames();
+    const championshipGames = getChampionshipGames();
+
     delete players[playerName];
+    delete championshipGames[playerName];
+
     const updatedGames = games.filter(
         (game) => game.player1 !== playerName && game.player2 !== playerName
     );
     GlickoStorage.savePlayers(players);
     GlickoStorage.saveGames(updatedGames);
+    saveChampionshipGames(championshipGames);
     GlickoMath.recalculateAllRatings();
     displayRating();
     displayHistory();
@@ -165,11 +236,26 @@ function displayPlayerList(showInactive = false) {
 function sortPlayers(players, sortBy, sortOrder) {
     const sortedPlayers = Object.entries(players);
     const seasonStats = GlickoStorage.getSeasonStats();
+    const championshipGames = getChampionshipGames();
     switch (sortBy) {
         case 'rating':
             sortedPlayers.sort((a, b) => b[1].rating - a[1].rating);
             break;
         case 'games':
+            sortedPlayers.sort((a, b) => {
+                const aTotal =
+                    (seasonStats[a[0]]?.games || 0) + (championshipGames[a[0]] || 0);
+                const bTotal =
+                    (seasonStats[b[0]]?.games || 0) + (championshipGames[b[0]] || 0);
+                return bTotal - aTotal;
+            });
+            break;
+        case 'championship':
+            sortedPlayers.sort(
+                (a, b) => (championshipGames[b[0]] || 0) - (championshipGames[a[0]] || 0)
+            );
+            break;
+        case 'season':
             sortedPlayers.sort(
                 (a, b) =>
                     (seasonStats[b[0]]?.games || 0) - (seasonStats[a[0]]?.games || 0)
@@ -198,11 +284,13 @@ function sortPlayers(players, sortBy, sortOrder) {
 function displayRating() {
     const players = GlickoStorage.getActivePlayers();
     const seasonStats = GlickoStorage.getSeasonStats();
+    const championshipGames = getChampionshipGames();
     const ratingBody = document.getElementById('ratingBody');
     ratingBody.innerHTML = '';
     if (Object.keys(players).length === 0) {
         ratingBody.innerHTML =
-            '<tr><td colspan="7" style="text-align: center;">Нет активных игроков</td></tr>';
+            '<tr><td colspan="9" style="text-align: center;">Нет активных игроков</td>' +
+            '</tr>';
         return;
     }
     const sortBy = document.getElementById('sortBy').value;
@@ -214,6 +302,8 @@ function displayRating() {
         const tournamentsCount = Array.isArray(playerStats.tournaments)
             ? playerStats.tournaments.length
             : 0;
+        const championshipCount = championshipGames[name] || 0;
+        const totalGames = playerStats.games + championshipCount;
         let lastUpdate =
             data.lastUpdate && data.lastUpdate > 0
                 ? new Date(data.lastUpdate).toLocaleDateString('ru-RU')
@@ -228,7 +318,16 @@ function displayRating() {
         )}</span></td>
             <td class="rating">${Math.round(data.rating)}</td>
             <td><span class="rd-value">${data.rd}</span></td>
+            <td>
+                <span class="championship-games-value" data-player="${escapeHtml(
+                    name
+                )}">${championshipCount}</span>
+                <button class="edit-championship-btn" onclick="editChampionshipGames('${escapeHtml(
+                    name
+                )}', event)" style="margin-left: 5px; padding: 2px 6px; font-size: 11px;">✏️</button>
+            </td>
             <td>${playerStats.games}</td>
+            <td class="total-games-cell"><strong>${totalGames}</strong></td>
             <td>${tournamentsCount}</td>
             <td>${lastUpdate}</td>
         `;
@@ -270,7 +369,8 @@ function displayHistory() {
     historyBody.innerHTML = '';
     if (games.length === 0) {
         historyBody.innerHTML =
-            '<tr><td colspan="8" style="text-align: center;">Нет истории игр</td></tr>';
+            '<tr><td colspan="8" style="text-align: center;">Нет истории игр</td>' +
+            '</tr>';
         return;
     }
     games.forEach((game, index) => {
@@ -611,9 +711,12 @@ function addGames(date, gamesData) {
                 tempPlayers[player1].rating - tempPlayers[player2].rating
             );
 
+            const player1BeforeGame = { ...tempPlayers[player1] };
+            const player2BeforeGame = { ...tempPlayers[player2] };
+
             const updatedPlayer1 = GlickoMath.updateRatingExact(
-                tempPlayers[player1],
-                tempPlayers[player2],
+                player1BeforeGame,
+                player2BeforeGame,
                 numResult1,
                 currentTime
             );
@@ -625,8 +728,8 @@ function addGames(date, gamesData) {
             };
 
             const updatedPlayer2 = GlickoMath.updateRatingExact(
-                tempPlayers[player2],
-                tempPlayers[player1],
+                player2BeforeGame,
+                player1BeforeGame,
                 numResult2,
                 currentTime
             );
@@ -674,11 +777,15 @@ function openPlayerModal(playerName) {
     const avgGamesPerTournament =
         tournamentsCount > 0 ? (playerStats.games / tournamentsCount).toFixed(1) : 0;
     const roundedRating = Math.round(player.rating);
+    const championshipCount = getPlayerChampionshipGames(playerName);
+    const totalAllGames = playerStats.games + championshipCount;
 
     document.getElementById('modalPlayerName').textContent = playerName;
     document.getElementById('modalPlayerRating').textContent = roundedRating;
     document.getElementById('modalPlayerRD').textContent = player.rd;
     document.getElementById('modalTotalGames').textContent = playerStats.games;
+    document.getElementById('modalChampionshipGames').textContent = championshipCount;
+    document.getElementById('modalTotalAllGames').textContent = totalAllGames;
     document.getElementById('modalTournamentsCount').textContent = tournamentsCount;
     document.getElementById('modalAvgGamesPerTournament').textContent =
         avgGamesPerTournament;
@@ -1305,3 +1412,9 @@ window.closeTournamentModal = closeTournamentModal;
 window.switchTab = switchTab;
 window.togglePlayerStatusPrompt = togglePlayerStatusPrompt;
 window.removeGame = removeGame;
+window.editChampionshipGames = editChampionshipGames;
+window.getChampionshipGames = getChampionshipGames;
+window.getPlayerChampionshipGames = getPlayerChampionshipGames;
+window.setChampionshipGames = setChampionshipGames;
+window.addChampionshipGame = addChampionshipGame;
+window.getTotalSeasonGames = getTotalSeasonGames;
